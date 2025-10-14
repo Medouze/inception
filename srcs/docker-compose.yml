@@ -1,0 +1,89 @@
+services:
+  # NGINX - Reverse proxy avec TLS
+  # Role: Point d'entree HTTPS, redirige les requetes PHP vers WordPress
+  nginx:
+    container_name: nginx
+    build:
+      context: ./requirements/nginx
+      dockerfile: Dockerfile
+    ports:
+      - "443:443"                            # Expose uniquement HTTPS (subject)
+    networks:
+      - inception                            # Reseau pour communiquer avec wordpress
+    volumes:
+      - wordpress_data:/var/www/html         # Acces aux fichiers WP (CSS, JS, images)
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}           # Utilise pour generer le certificat SSL
+    depends_on:
+      - wordpress                            # Demarre apres wordpress
+    restart: always
+
+  # WordPress + PHP-FPM
+  # Role: Execute le code PHP, gere le CMS WordPress
+  wordpress:
+    container_name: wordpress
+    build:
+      context: ./requirements/wordpress
+      dockerfile: Dockerfile
+    networks:
+      - inception                            # Reseau pour MariaDB et NGINX
+    volumes:
+      - wordpress_data:/var/www/html         # Stockage persistant des fichiers WP
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}           # URL du site
+      - MYSQL_DATABASE=${MYSQL_DATABASE}     # Nom de la base WordPress
+      - MYSQL_USER=${MYSQL_USER}             # User non-root pour se connecter a la DB
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}     # Mot de passe DB
+      - MYSQL_HOST=mariadb                   # Hostname du conteneur MariaDB
+      - WP_ADMIN_USER=${WP_ADMIN_USER}       # Admin WP (pas "admin" - forbidden)
+      - WP_ADMIN_PASSWORD=${WP_ADMIN_PASSWORD}
+      - WP_ADMIN_EMAIL=${WP_ADMIN_EMAIL}
+      - WP_USER=${WP_USER}                   # Utilisateur supplementaire (subject)
+      - WP_USER_PASSWORD=${WP_USER_PASSWORD}
+      - WP_USER_EMAIL=${WP_USER_EMAIL}
+    depends_on:
+      - mariadb                              # Attend que MariaDB soit pret
+    restart: always
+
+  # MariaDB - Base de donnees MySQL
+  # Role: Stocke les donnees WordPress (posts, users, settings, etc)
+  mariadb:
+    container_name: mariadb
+    build:
+      context: ./requirements/mariadb
+      dockerfile: Dockerfile
+    networks:
+      - inception                            # Reseau interne uniquement
+    volumes:
+      - mariadb_data:/var/lib/mysql          # Persistance des donnees DB
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}  # Mot de passe root (setup)
+      - MYSQL_DATABASE=${MYSQL_DATABASE}     # Nom de la DB a creer
+      - MYSQL_USER=${MYSQL_USER}             # User WP (non-root, plus secure)
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}     # Mot de passe du user WP
+    restart: always
+
+# Reseau bridge - permet aux conteneurs de communiquer par hostname
+# Ex: wordpress peut contacter mariadb via le hostname "mariadb"
+networks:
+  inception:
+    driver: bridge
+    name: inception
+
+# Volumes - bind mount vers le host pour persister les donnees
+# type:none + o:bind = monte un dossier du host dans le conteneur
+# Les donnees survivent meme si les conteneurs sont supprimes
+volumes:
+  wordpress_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/data/wordpress         # Dossier sur le host
+
+  mariadb_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${HOME}/data/mariadb           # Dossier sur le host

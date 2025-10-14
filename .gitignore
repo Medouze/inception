@@ -1,0 +1,15 @@
+# Environment variables (contains sensitive data)
+srcs/.env
+
+# Docker volumes data
+/home/mlavergn/data/
+
+# System files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE files
+.vscode/
+.idea/
