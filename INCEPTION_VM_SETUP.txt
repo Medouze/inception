@@ -1,0 +1,280 @@
+================================================================================
+                    INCEPTION - GUIDE INSTALLATION VM
+================================================================================
+
+ETAPE 1: TELECHARGEMENT DES OUTILS
+================================================================================
+
+VirtualBox:
+  https://www.virtualbox.org/wiki/Downloads
+  → Telecharge la version pour ton OS
+
+Debian 12 ISO:
+  https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/
+  → Prends: debian-12.X.X-amd64-netinst.iso (environ 650 MB)
+
+
+================================================================================
+ETAPE 2: CREATION DE LA VM DANS VIRTUALBOX
+================================================================================
+
+1. Ouvre VirtualBox → Nouvelle
+2. Configuration:
+   - Nom: Inception
+   - Type: Linux
+   - Version: Debian (64-bit)
+   - RAM: 4096 MB (4 GB minimum)
+   - Disque: Creer un disque dur virtuel (VDI, dynamique, 30 GB)
+
+3. Parametres avances (clic sur la VM → Configuration):
+   - Systeme → Processeur: 2 CPU
+   - Reseau → Carte 1: Acces par pont (Bridged)
+   - Stockage: Ajoute l'ISO Debian dans le lecteur optique
+
+
+================================================================================
+ETAPE 3: INSTALLATION DE DEBIAN 12
+================================================================================
+
+1. Demarre la VM → Choisis l'ISO Debian
+
+2. Menu d'installation:
+   - Install (pas graphical)
+   - Langue: Francais (ou English)
+   - Localisation: Ta region
+   - Clavier: Francais/Anglais
+
+3. Configuration reseau:
+   - Nom de machine: inception (ou ton login)
+   - Domaine: laisse vide
+
+4. Utilisateurs:
+   - Mot de passe root: choisis-en un
+   - Utilisateur: mlavergn (ton login 42)
+   - Mot de passe user: choisis-en un
+
+5. Partitionnement:
+   - Assiste - utiliser un disque entier
+   - Tout dans une seule partition
+
+6. Selection de logiciels:
+   - DESELECTIONNE l'environnement de bureau
+   - Garde uniquement:
+     ✓ Serveur SSH
+     ✓ Utilitaires usuels du systeme
+
+7. GRUB: Oui, installe sur /dev/sda
+
+8. Redemarre la VM
+
+
+================================================================================
+ETAPE 4: CONNEXION ET MISE A JOUR
+================================================================================
+
+Login avec ton user (pas root): mlavergn
+
+Passe en root:
+  su -
+
+Mise a jour systeme:
+  apt update && apt upgrade -y
+
+
+================================================================================
+ETAPE 5: INSTALLATION DE DOCKER ET DEPENDANCES
+================================================================================
+
+Installation des paquets necessaires:
+  apt install -y docker.io docker-compose make git sudo
+
+Ajoute ton user au groupe docker:
+  usermod -aG docker mlavergn
+
+Verifie l'installation:
+  docker --version
+  docker-compose --version
+
+Active Docker au demarrage:
+  systemctl enable docker
+  systemctl start docker
+
+Configure sudo pour ton user:
+  usermod -aG sudo mlavergn
+
+Redemarre pour appliquer les changements de groupe:
+  reboot
+
+
+================================================================================
+ETAPE 6: TRANSFERT DU PROJET
+================================================================================
+
+Option 1 - Via Git (recommande):
+  # Reconnecte-toi apres reboot
+  ssh mlavergn@<IP_VM>
+
+  # Clone ton repo
+  git clone <ton_repo_inception> ~/inception
+  cd ~/inception
+
+Option 2 - Via SCP depuis ton PC:
+  # Depuis ton PC (WSL/terminal)
+  scp -r /home/medouze/42/inception mlavergn@<IP_VM>:~/
+
+Trouver l'IP de la VM:
+  ip addr show | grep inet
+
+
+================================================================================
+ETAPE 7: CONFIGURATION FINALE
+================================================================================
+
+  cd ~/inception
+
+  # Cree les dossiers de donnees
+  mkdir -p ~/data/wordpress ~/data/mariadb
+
+  # Edite le .env si besoin
+  nano srcs/.env
+
+  # Ajoute le domaine au hosts
+  echo "127.0.0.1 mlavergn.42.fr" | sudo tee -a /etc/hosts
+
+  # Lance le projet
+  make
+
+
+================================================================================
+ETAPE 8: VERIFICATION
+================================================================================
+
+Attends 30 secondes puis verifie les conteneurs:
+  docker ps
+
+Tu dois voir 3 conteneurs: nginx, wordpress, mariadb
+
+
+================================================================================
+ACCES AU SITE
+================================================================================
+
+METHODE 1: Depuis ton navigateur (PC hote) - RECOMMANDE
+
+Configuration reseau Bridge:
+  1. Eteins la VM
+  2. VirtualBox → Configuration → Reseau → Carte 1 → Acces par pont
+  3. Demarre la VM
+  4. Trouve l'IP: ip addr show | grep "inet " | grep -v 127.0.0.1
+  5. Sur ton PC (navigateur): https://192.168.1.X
+
+
+METHODE 2: Port Forwarding (si Bridge ne marche pas)
+
+  1. Eteins la VM
+  2. VirtualBox → Configuration → Reseau → Mode NAT
+  3. Avance → Redirection de ports → Ajoute:
+     - Nom: HTTPS
+     - Protocole: TCP
+     - IP hote: 127.0.0.1
+     - Port hote: 8443
+     - IP invite: (vide)
+     - Port invite: 443
+  4. Demarre la VM et lance make
+  5. Sur ton PC: https://localhost:8443
+
+
+METHODE 3: Test en ligne de commande (dans la VM)
+
+  curl -k https://localhost
+  curl -kI https://localhost
+
+
+================================================================================
+COMMANDES UTILES VM
+================================================================================
+
+  # Voir les logs
+  make logs
+
+  # Arreter les conteneurs
+  make down
+
+  # Tout nettoyer
+  make fclean
+
+  # Rebuild complet
+  make re
+
+  # Tester Docker sans sudo
+  docker ps
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Docker ne demarre pas:
+  sudo systemctl status docker
+  sudo systemctl restart docker
+
+Permission denied sur Docker:
+  groups
+  # Si docker n'apparait pas, relogue-toi
+  exit
+
+Pas d'acces reseau dans la VM:
+  → VirtualBox → Config VM → Reseau → Essaie NAT au lieu de Bridge
+
+Site inaccessible:
+  docker ps
+  docker logs nginx
+  docker logs wordpress
+  docker logs mariadb
+
+
+================================================================================
+POUR LA SOUTENANCE
+================================================================================
+
+Option A - Evaluateur vient avec son PC:
+  → Utilise la methode 1 (Bridge)
+  → Il pourra ouvrir le site sur son navigateur via l'IP de ta VM
+
+Option B - Evaluateur utilise ta VM:
+  → Installe un navigateur texte: sudo apt install lynx
+  → Lance: lynx https://localhost
+
+Option C - Captures d'ecran + curl:
+  → Fais des captures avant la soutenance
+  → Montre le code + logs + curl en live
+
+
+RECOMMANDATION: Utilise la methode 1 (Bridge) pour la soutenance!
+
+
+================================================================================
+CREDENTIALS PAR DEFAUT
+================================================================================
+
+WordPress Admin:
+  User: wpmaster
+  Pass: secure_admin_password_change_me
+  Email: admin@mlavergn.42.fr
+
+WordPress User:
+  User: wpuser
+  Pass: secure_user_password_change_me
+  Email: user@mlavergn.42.fr
+
+MariaDB Root:
+  Pass: secure_root_password_change_me
+
+MariaDB WordPress User:
+  User: wordpress_user
+  Pass: secure_db_password_change_me
+
+
+================================================================================
+FIN DU GUIDE - Bon courage pour ta soutenance! 🚀
+================================================================================
