@@ -274,7 +274,10 @@ MariaDB WordPress User:
   User: wordpress_user
   Pass: secure_db_password_change_me
 
-
+Test auto restart :
+sudo systemctl restart docker
+  sleep 5
+  docker ps
 ================================================================================
 FIN DU GUIDE - Bon courage pour ta soutenance! 🚀
 ================================================================================
